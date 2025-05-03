@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Periskope Webhook Viewer</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/highlight.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/github-dark.min.css">
+    <style>
+        .json-container {
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        .animated-bg {
+            background: linear-gradient(-45deg, #ee7752, #e73c7e, #23a6d5, #23d5ab);
+            background-size: 400% 400%;
+            animation: gradient 15s ease infinite;
+        }
+        @keyframes gradient {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <header class="mb-8 text-center">
+            <div class="animated-bg text-white p-6 rounded-lg shadow-lg">
+                <h1 class="text-3xl font-bold">Periskope Webhook Viewer</h1>
+                <p class="mt-2">View ticket creation events in real-time</p>
+            </div>
+        </header>
+
+        <div class="bg-white rounded-lg shadow-lg p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-semibold">Latest Webhook Data</h2>
+                <div>
+                    <button id="refreshBtn" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-md transition">
+                        Refresh Data
+                    </button>
+                    <span id="status" class="ml-2 text-sm text-gray-500"></span>
+                </div>
+            </div>
+            
+            <div id="loadingIndicator" class="hidden py-20 text-center">
+                <div class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-blue-500 border-t-transparent"></div>
+                <p class="mt-4 text-gray-600">Fetching latest data...</p>
+            </div>
+            
+            <div id="noData" class="py-20 text-center">
+                <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                <p class="mt-4 text-gray-600">No ticket creation events received yet.</p>
+                <p class="text-sm text-gray-500 mt-2">Waiting for webhook data from Periskope...</p>
+            </div>
+            
+            <div id="dataContainer" class="hidden">
+                <div class="mb-4 p-2 bg-gray-100 rounded-md text-sm">
+                    <div class="flex flex-wrap gap-4">
+                        <div id="eventType" class="bg-blue-100 text-blue-800 px-3 py-1 rounded-full"></div>
+                        <div id="timestamp" class="bg-gray-200 text-gray-800 px-3 py-1 rounded-full"></div>
+                        <div id="orgId" class="bg-purple-100 text-purple-800 px-3 py-1 rounded-full"></div>
+                    </div>
+                </div>
+                
+                <div class="json-container">
+                    <pre><code id="jsonData" class="language-json rounded-md"></code></pre>
+                </div>
+            </div>
+        </div>
+        
+        <div class="mt-8 bg-white rounded-lg shadow-lg p-6">
+            <h2 class="text-xl font-semibold mb-4">How to Setup</h2>
+            <ol class="list-decimal pl-5 space-y-2">
+                <li>Configure this URL as a webhook endpoint in your Periskope account</li>
+                <li>The webhook endpoint should be: <code id="webhookUrl" class="bg-gray-100 px-2 py-1 rounded">https://your-deployment-url/webhook</code></li>
+                <li>Select the <code class="bg-gray-100 px-2 py-1 rounded">ticket.created</code> event</li>
+                <li>Generate a signing key in Periskope</li>
+                <li>Add the signing key to your Vercel environment variables as <code class="bg-gray-100 px-2 py-1 rounded">PERISKOPE_SIGNING_SECRET</code></li>
+            </ol>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Update webhook URL
+            document.getElementById('webhookUrl').textContent = window.location.origin + '/webhook';
+            
+            // Initial data fetch
+            fetchData();
+            
+            // Set up refresh button
+            document.getElementById('refreshBtn').addEventListener('click', fetchData);
+            
+            // Auto-refresh every 30 seconds
+            setInterval(fetchData, 30000);
+            
+            function fetchData() {
+                const loadingIndicator = document.getElementById('loadingIndicator');
+                const noData = document.getElementById('noData');
+                const dataContainer = document.getElementById('dataContainer');
+                const status = document.getElementById('status');
+                
+                loadingIndicator.classList.remove('hidden');
+                noData.classList.add('hidden');
+                dataContainer.classList.add('hidden');
+                status.textContent = 'Refreshing...';
+                
+                fetch('/api/last-event')
+                    .then(response => response.json())
+                    .then(data => {
+                        loadingIndicator.classList.add('hidden');
+                        status.textContent = 'Last updated: ' + new Date().toLocaleTimeString();
+                        
+                        if (data.message === 'No events received yet') {
+                            noData.classList.remove('hidden');
+                            return;
+                        }
+                        
+                        // Display the data
+                        dataContainer.classList.remove('hidden');
+                        
+                        // Update event metadata
+                        document.getElementById('eventType').textContent = data.event || 'Unknown Event';
+                        document.getElementById('timestamp').textContent = 
+                            data.timestamp ? new Date(data.timestamp).toLocaleString() : 'No timestamp';
+                        document.getElementById('orgId').textContent = data.org_id || 'No Organization ID';
+                        
+                        // Format and display JSON
+                        const jsonString = JSON.stringify(data, null, 2);
+                        document.getElementById('jsonData').textContent = jsonString;
+                        hljs.highlightAll();
+                    })
+                    .catch(error => {
+                        loadingIndicator.classList.add('hidden');
+                        status.textContent = 'Error refreshing data';
+                        console.error('Error fetching webhook data:', error);
+                    });
+            }
+        });
+    </script>
+</body>
+</html>
