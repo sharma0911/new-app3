@@ -1,0 +1,28 @@
+{
+  "name": "periskope-webhook-viewer",
+  "version": "1.0.0",
+  "description": "A webhook receiver for Periskope tickets that displays JSON data on a UI",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js"
+  },
+  "keywords": [
+    "periskope",
+    "webhook",
+    "express",
+    "vercel"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}
